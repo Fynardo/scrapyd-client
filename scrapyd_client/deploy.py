@@ -45,6 +45,8 @@ def parse_opts():
                       help="the project name in the target")
     parser.add_option("-v", "--version",
                       help="the version to deploy. Defaults to current timestamp")
+    parser.add_option("-s", "--settings",
+                      help="the settings file to deploy")
     parser.add_option("-l", "--list-targets", action="store_true",
                       help="list available targets")
     parser.add_option("-a", "--deploy-all-targets", action="store_true", help="deploy all targets")
@@ -87,7 +89,7 @@ def main():
     tmpdir = None
 
     if opts.build_egg:  # build egg only
-        egg, tmpdir = _build_egg()
+        egg, tmpdir = _build_egg(target, opts)
         _log("Writing egg to %s" % opts.build_egg)
         shutil.copyfile(egg, opts.build_egg)
     elif opts.deploy_all_targets:
@@ -121,7 +123,7 @@ def _build_egg_and_deploy_target(target, version, opts):
         egg = opts.egg
     else:
         _log("Packing version %s" % version)
-        egg, tmpdir = _build_egg()
+        egg, tmpdir = _build_egg(target, opts)
     if not _upload_egg(target, egg, project, version):
         exitcode = 1
     return exitcode, tmpdir
@@ -207,6 +209,9 @@ def _get_version(target, opts):
     else:
         return str(int(time.time()))
 
+def _get_settings(target, opts):
+    return opts.settings or target.get('settings') or 'default'
+
 
 def _upload_egg(target, eggpath, project, version):
     with open(eggpath, 'rb') as f:
@@ -264,11 +269,12 @@ def _http_post(request):
         _log("Deploy failed: %s" % e)
 
 
-def _build_egg():
+def _build_egg(target, opts):
     closest = closest_scrapy_cfg()
     os.chdir(os.path.dirname(closest))
     if not os.path.exists('setup.py'):
-        settings = get_config().get('settings', 'default')
+        settings = get_config().get('settings', _get_settings(target, opts))
+        _log("Using settings: %s" % settings)
         _create_default_setup_py(settings=settings)
     d = tempfile.mkdtemp(prefix="scrapydeploy-")
     o = open(os.path.join(d, "stdout"), "wb")
